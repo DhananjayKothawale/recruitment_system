@@ -174,6 +174,11 @@ python main.py
 
 Open browser: **http://localhost:8000**
 
+## Docker (optional, recommended for production)
+
+There is a `Dockerfile` included to build a small production image. For local testing and fast deploys, see `DEPLOY_DOCKER.md`.
+
+
 ---
 
 ## 📡 API Endpoints
