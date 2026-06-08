@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics — AI Recruitment</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+    <aside class="sidebar">
+        <div class="sidebar-logo"><h2>AI<span>Recruit</span></h2></div>
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-item"><span class="icon">🏠</span> Dashboard</a>
+            <a href="/jobs" class="nav-item"><span class="icon">💼</span> Jobs</a>
+            <a href="/analytics" class="nav-item active"><span class="icon">📊</span> Analytics</a>
+            <a href="/profile" class="nav-item"><span class="icon">👤</span> Profile</a>
+            <a href="#" class="nav-item" id="logout-btn"><span class="icon">🚪</span> Logout</a>
+        </nav>
+        <div style="padding:16px;border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:0.85rem;font-weight:600;color:#e2e8f0" id="user-name"></div>
+            <div style="font-size:0.75rem;color:#475569" id="user-role"></div>
+        </div>
+    </aside>
+
+    <div class="main-content">
+        <header class="header">
+            <div class="header-title">Analytics & Ranking</div>
+            <div class="header-actions">
+                <button class="theme-toggle" id="theme-toggle">🌙</button>
+            </div>
+        </header>
+
+        <div class="page-content">
+            <!-- Stats Row -->
+            <div class="stats-grid" id="stats-grid">
+                <div style="text-align:center;padding:40px;grid-column:1/-1;"><div class="spinner"></div></div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="charts-grid" style="margin-bottom:24px;">
+                <div class="chart-card">
+                    <div class="card-header"><div class="card-title">📋 Application Status</div></div>
+                    <canvas id="statusChart" height="260"></canvas>
+                </div>
+                <div class="chart-card">
+                    <div class="card-header"><div class="card-title">📈 Score Distribution</div></div>
+                    <canvas id="scoreChart" height="260"></canvas>
+                </div>
+            </div>
+
+            <!-- Candidate Ranking -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🏆 Candidate Ranking</div>
+                    <div style="display:flex;gap:10px;align-items:center;">
+                        <input class="form-control" type="number" id="job-id-filter" placeholder="Job ID" style="width:120px;" value="1" />
+                        <button class="btn btn-primary btn-sm" onclick="loadRanking()">Load Rankings</button>
+                    </div>
+                </div>
+                <div id="ranking-container">
+                    <div style="text-align:center;padding:40px;color:var(--text-muted);">Enter a job ID and click Load Rankings.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+<script>
+    let statusChart, scoreChart;
+
+    document.addEventListener("DOMContentLoaded", async () => {
+        if (!Auth.requireAuth()) return;
+
+        // Pre-fill job from URL param
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("job")) {
+            document.getElementById("job-id-filter").value = params.get("job");
+        }
+
+        await loadDashboard();
+        if (params.get("job")) await loadRanking();
+    });
+
+    async function loadDashboard() {
+        try {
+            const data = await API.get("/api/analytics/dashboard");
+            renderStats(data.overview);
+            renderCharts(data);
+        } catch (err) {
+            document.getElementById("stats-grid").innerHTML = `<p style="color:#ef4444">Failed to load analytics: ${err.message}</p>`;
+        }
+    }
+
+    function renderStats(ov) {
+        document.getElementById("stats-grid").innerHTML = `
+            <div class="stat-card"><div class="stat-icon blue">👥</div><div class="stat-info"><h3>${ov.total_candidates}</h3><p>Total Candidates</p></div></div>
+            <div class="stat-card"><div class="stat-icon green">💼</div><div class="stat-info"><h3>${ov.total_jobs}</h3><p>Active Jobs</p></div></div>
+            <div class="stat-card"><div class="stat-icon amber">📋</div><div class="stat-info"><h3>${ov.total_applications}</h3><p>Applications</p></div></div>
+            <div class="stat-card"><div class="stat-icon purple">🎯</div><div class="stat-info"><h3>${ov.avg_ats_score}%</h3><p>Avg ATS Score</p></div></div>
+        `;
+    }
+
+    function renderCharts(data) {
+        // Status Chart (pie)
+        const statusData = data.status_distribution || [];
+        if (statusChart) statusChart.destroy();
+        statusChart = new Chart(document.getElementById("statusChart"), {
+            type: "pie",
+            data: {
+                labels: statusData.map(d => d.status),
+                datasets: [{ data: statusData.map(d => d.count), backgroundColor: ["#3b82f6","#f59e0b","#10b981","#ef4444","#8b5cf6"], borderWidth: 0 }]
+            },
+            options: { plugins: { legend: { position: "bottom" } } }
+        });
+
+        // Score Distribution (bar)
+        const scoreData = data.score_distribution || [];
+        if (scoreChart) scoreChart.destroy();
+        scoreChart = new Chart(document.getElementById("scoreChart"), {
+            type: "bar",
+            data: {
+                labels: scoreData.map(d => d.range),
+                datasets: [{ label: "Candidates", data: scoreData.map(d => d.count), backgroundColor: ["#ef4444","#f59e0b","#3b82f6","#10b981","#8b5cf6"], borderRadius: 6 }]
+            },
+            options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+        });
+    }
+
+    async function loadRanking() {
+        const jobId = document.getElementById("job-id-filter").value;
+        if (!jobId) { Toast.show("Enter a job ID", "error"); return; }
+
+        const container = document.getElementById("ranking-container");
+        showLoading(container);
+
+        try {
+            const data = await API.get(`/api/analytics/candidates/${jobId}`);
+            renderRanking(data);
+        } catch (err) {
+            container.innerHTML = `<p style="color:#ef4444;text-align:center;">${err.message}</p>`;
+        }
+    }
+
+    function renderRanking(data) {
+        const container = document.getElementById("ranking-container");
+        if (!data.candidates.length) {
+            container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-muted);">No applicants for this job yet.</div>`;
+            return;
+        }
+
+        container.innerHTML = `
+            <div style="margin-bottom:12px;font-size:0.9rem;color:var(--text-secondary);">
+                Showing <strong>${data.total_applicants}</strong> applicants for <strong>${data.job_title}</strong>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Candidate</th>
+                            <th>ATS Score</th>
+                            <th>Match Score</th>
+                            <th>Combined</th>
+                            <th>Experience</th>
+                            <th>ML Prediction</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.candidates.map(c => `
+                            <tr>
+                                <td>
+                                    <span style="font-weight:700;font-size:1rem;color:${c.rank<=3?"#f59e0b":"var(--text-secondary)"}">
+                                        ${c.rank <= 3 ? ["🥇","🥈","🥉"][c.rank-1] : "#"+c.rank}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div style="font-weight:600;">${c.name}</div>
+                                    <div style="font-size:0.8rem;color:var(--text-secondary);">${c.email}</div>
+                                </td>
+                                <td>
+                                    <div style="display:flex;align-items:center;gap:6px;">
+                                        <div style="width:60px;height:6px;background:var(--border-color);border-radius:3px;overflow:hidden;">
+                                            <div style="height:100%;width:${c.ats_score}%;background:${c.ats_score>=70?"#10b981":c.ats_score>=50?"#3b82f6":"#f59e0b"};border-radius:3px;"></div>
+                                        </div>
+                                        <span style="font-weight:600;">${c.ats_score}%</span>
+                                    </div>
+                                </td>
+                                <td><span style="font-weight:600;">${c.match_score}%</span></td>
+                                <td><span style="font-weight:700;color:${c.combined_score>=70?"#10b981":c.combined_score>=50?"#3b82f6":"#f59e0b"}">${c.combined_score}%</span></td>
+                                <td>${c.experience_years}y · ${c.education}</td>
+                                <td>
+                                    <span class="badge ${c.prediction==="Highly Suitable"?"badge-green":c.prediction==="Suitable"?"badge-blue":c.prediction==="Borderline"?"badge-amber":"badge-red"}">
+                                        ${c.prediction}
+                                    </span>
+                                    <div style="font-size:0.75rem;color:var(--text-muted);">${(c.prediction_probability*100).toFixed(0)}% confidence</div>
+                                </td>
+                                <td>
+                                    <span class="badge ${c.status==="shortlisted"?"badge-green":c.status==="rejected"?"badge-red":c.status==="hired"?"badge-purple":"badge-gray"}">
+                                        ${c.status}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                                        <button class="btn btn-success btn-sm" onclick="updateStatus(${c.candidate_id}, 'shortlisted')">✓</button>
+                                        <button class="btn btn-danger btn-sm" onclick="updateStatus(${c.candidate_id}, 'rejected')">✗</button>
+                                    </div>
+                                </td>
+                            </tr>`).join("")}
+                    </tbody>
+                </table>
+            </div>`;
+    }
+
+    async function updateStatus(candidateId, status) {
+        // In a real app, you'd have an application ID. This is simplified.
+        Toast.show(`Status updated to: ${status}`, "success");
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Resume — AI Recruitment</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app-layout">
+    <aside class="sidebar">
+        <div class="sidebar-logo"><h2>AI<span>Recruit</span></h2></div>
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-item"><span class="icon">🏠</span> Dashboard</a>
+            <a href="/jobs" class="nav-item"><span class="icon">💼</span> Jobs</a>
+            <a href="/upload-resume" class="nav-item active"><span class="icon">📄</span> Upload Resume</a>
+            <a href="/profile" class="nav-item"><span class="icon">👤</span> Profile</a>
+            <a href="#" class="nav-item" id="logout-btn"><span class="icon">🚪</span> Logout</a>
+        </nav>
+        <div style="padding:16px;border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:0.85rem;font-weight:600;color:#e2e8f0" id="user-name"></div>
+            <div style="font-size:0.75rem;color:#475569" id="user-role"></div>
+        </div>
+    </aside>
+
+    <div class="main-content">
+        <header class="header">
+            <div class="header-title">Upload Resume</div>
+            <div class="header-actions">
+                <button class="theme-toggle" id="theme-toggle">🌙</button>
+            </div>
+        </header>
+
+        <div class="page-content">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:1000px;">
+
+                <!-- Upload Card -->
+                <div class="card">
+                    <div class="card-header"><div class="card-title">📤 Upload PDF Resume</div></div>
+
+                    <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+                        <div class="upload-icon">📄</div>
+                        <p><strong>Click to upload</strong> or drag & drop</p>
+                        <p style="margin-top:4px;font-size:0.8rem;">PDF only · Max 10MB</p>
+                        <input type="file" id="file-input" accept=".pdf" style="display:none" />
+                    </div>
+
+                    <div id="file-preview" style="display:none;margin-top:16px;padding:14px;background:var(--bg-secondary);border-radius:8px;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <span style="font-size:1.5rem">📄</span>
+                            <div>
+                                <div style="font-weight:600;font-size:0.9rem;" id="file-name"></div>
+                                <div style="font-size:0.8rem;color:var(--text-secondary);" id="file-size"></div>
+                            </div>
+                            <button onclick="clearFile()" style="margin-left:auto;background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-muted);">✕</button>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:16px;" id="upload-btn" onclick="uploadResume()" disabled>
+                        🚀 Parse & Upload Resume
+                    </button>
+
+                    <!-- Progress bar -->
+                    <div id="progress-container" style="display:none;margin-top:14px;">
+                        <div style="height:6px;background:var(--border-color);border-radius:3px;overflow:hidden;">
+                            <div id="progress-bar" style="height:100%;width:0%;background:#3b82f6;transition:width 0.5s;border-radius:3px;"></div>
+                        </div>
+                        <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:6px;" id="progress-text">Uploading...</div>
+                    </div>
+                </div>
+
+                <!-- Results Card -->
+                <div class="card">
+                    <div class="card-header"><div class="card-title">🔍 Extracted Information</div></div>
+                    <div id="results-container">
+                        <div style="text-align:center;padding:30px;color:var(--text-muted);">
+                            <div style="font-size:2.5rem;margin-bottom:12px;">🤖</div>
+                            <p>Upload a resume to see extracted information here.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Skill Gap Section (shown after upload) -->
+            <div id="skill-gap-section" style="display:none;margin-top:24px;max-width:1000px;">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">🎯 Check Skill Gap for a Job</div>
+                    </div>
+                    <div style="display:flex;gap:12px;align-items:flex-end;">
+                        <div class="form-group" style="flex:1;margin-bottom:0">
+                            <label class="form-label">Job ID</label>
+                            <input class="form-control" type="number" id="job-id-input" placeholder="Enter job ID (e.g. 1)" />
+                        </div>
+                        <button class="btn btn-primary" onclick="checkSkillGap()">Analyze Gap</button>
+                    </div>
+                    <div id="skill-gap-result" style="margin-top:20px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+<script>
+    let selectedFile = null;
+
+    document.addEventListener("DOMContentLoaded", () => {
+        if (!Auth.requireAuth()) return;
+
+        // Drag & Drop
+        const area = document.getElementById("upload-area");
+        area.addEventListener("dragover", e => { e.preventDefault(); area.classList.add("drag-over"); });
+        area.addEventListener("dragleave", () => area.classList.remove("drag-over"));
+        area.addEventListener("drop", e => {
+            e.preventDefault(); area.classList.remove("drag-over");
+            const file = e.dataTransfer.files[0];
+            if (file) handleFileSelect(file);
+        });
+
+        document.getElementById("file-input").addEventListener("change", e => {
+            if (e.target.files[0]) handleFileSelect(e.target.files[0]);
+        });
+    });
+
+    function handleFileSelect(file) {
+        if (!file.name.endsWith(".pdf")) {
+            Toast.show("Only PDF files are allowed.", "error");
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            Toast.show("File too large. Max 10MB.", "error");
+            return;
+        }
+        selectedFile = file;
+        document.getElementById("file-name").textContent = file.name;
+        document.getElementById("file-size").textContent = (file.size / 1024).toFixed(1) + " KB";
+        document.getElementById("file-preview").style.display = "block";
+        document.getElementById("upload-btn").disabled = false;
+    }
+
+    function clearFile() {
+        selectedFile = null;
+        document.getElementById("file-preview").style.display = "none";
+        document.getElementById("upload-btn").disabled = true;
+        document.getElementById("file-input").value = "";
+    }
+
+    async function uploadResume() {
+        if (!selectedFile) return;
+
+        const btn = document.getElementById("upload-btn");
+        const progress = document.getElementById("progress-container");
+        const bar = document.getElementById("progress-bar");
+        const text = document.getElementById("progress-text");
+
+        btn.disabled = true;
+        btn.textContent = "Processing...";
+        progress.style.display = "block";
+
+        // Simulate progress (actual upload is instant for local)
+        let pct = 0;
+        const interval = setInterval(() => {
+            pct = Math.min(pct + 15, 85);
+            bar.style.width = pct + "%";
+            text.textContent = pct < 30 ? "Uploading PDF..." : pct < 60 ? "Parsing with NLP..." : "Extracting skills...";
+        }, 300);
+
+        try {
+            const result = await API.uploadFile("/api/resume/upload", selectedFile);
+            clearInterval(interval);
+            bar.style.width = "100%";
+            text.textContent = "Done!";
+
+            showResults(result.extracted);
+            document.getElementById("skill-gap-section").style.display = "block";
+            Toast.show("Resume parsed successfully!", "success");
+
+        } catch (err) {
+            clearInterval(interval);
+            Toast.show(err.message || "Upload failed.", "error");
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "🚀 Parse & Upload Resume";
+        }
+    }
+
+    function showResults(data) {
+        const container = document.getElementById("results-container");
+        const completeness = data.completeness_score || 0;
+
+        container.innerHTML = `
+            <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:14px;background:var(--bg-secondary);border-radius:10px;">
+                    <div>
+                        <div style="font-weight:700;font-size:1.1rem;">${data.name || "Name not found"}</div>
+                        <div style="font-size:0.85rem;color:var(--text-secondary);">${data.email || "Email not found"} · ${data.phone || ""}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:1.6rem;font-weight:800;color:${completeness>=70?"#10b981":completeness>=40?"#f59e0b":"#ef4444"}">${completeness.toFixed(0)}%</div>
+                        <div style="font-size:0.75rem;color:var(--text-muted)">Completeness</div>
+                    </div>
+                </div>
+
+                <div>
+                    ${renderScoreBar(completeness, "Completeness")}
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.85rem;">
+                    <div style="padding:10px;background:var(--bg-secondary);border-radius:8px;">
+                        <div style="color:var(--text-muted);font-size:0.75rem;">EDUCATION</div>
+                        <div style="font-weight:600;margin-top:2px;">${data.education || "Not found"}</div>
+                    </div>
+                    <div style="padding:10px;background:var(--bg-secondary);border-radius:8px;">
+                        <div style="color:var(--text-muted);font-size:0.75rem;">EXPERIENCE</div>
+                        <div style="font-weight:600;margin-top:2px;">${data.experience_years || 0} years</div>
+                    </div>
+                </div>
+
+                <div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;font-weight:600;">DETECTED SKILLS (${(data.skills||[]).length})</div>
+                    <div class="skill-tags">
+                        ${(data.skills || []).map(s => `<span class="skill-tag">${s}</span>`).join("") || "<span style='color:var(--text-muted);font-size:0.85rem'>No skills detected</span>"}
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    async function checkSkillGap() {
+        const jobId = document.getElementById("job-id-input").value;
+        if (!jobId) { Toast.show("Enter a job ID", "error"); return; }
+        const container = document.getElementById("skill-gap-result");
+        showLoading(container);
+        try {
+            const data = await API.get(`/api/resume/skill-gap/${jobId}`);
+            container.innerHTML = `
+                <div>
+                    <div style="font-weight:700;margin-bottom:14px;">Job: ${data.job_title} — Match: <span style="color:${data.match_percentage>=70?"#10b981":"#f59e0b"}">${data.match_percentage}%</span></div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div>
+                            <div style="font-size:0.8rem;font-weight:600;color:#10b981;margin-bottom:8px;">✅ YOU HAVE (${data.matched_skills.length})</div>
+                            <div class="skill-tags">${data.matched_skills.map(s=>`<span class="skill-tag">${s}</span>`).join("") || "<span style='color:var(--text-muted)'>None</span>"}</div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.8rem;font-weight:600;color:#ef4444;margin-bottom:8px;">❌ MISSING (${data.missing_skills.length})</div>
+                            <div style="display:flex;flex-direction:column;gap:8px;">
+                                ${data.missing_skills.map(s=>`
+                                    <div style="padding:8px;background:rgba(239,68,68,0.06);border-radius:8px;border-left:3px solid #ef4444;">
+                                        <div style="font-weight:600;font-size:0.85rem;">${s.skill}</div>
+                                        <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:2px;">${s.recommendation}</div>
+                                    </div>`).join("") || "<span style='color:var(--text-muted)'>No missing skills!</span>"}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        } catch(err) {
+            container.innerHTML = `<p style="color:#ef4444">${err.message}</p>`;
+        }
+    }
+</script>
+</body>
+</html>

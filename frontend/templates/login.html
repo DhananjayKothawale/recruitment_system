@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — AI Recruitment</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body { background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .auth-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: var(--shadow-lg);
+        }
+        .auth-logo { font-size: 1.4rem; font-weight: 800; margin-bottom: 8px; color: var(--text-primary); }
+        .auth-logo span { color: #3b82f6; }
+        .auth-subtitle { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 28px; }
+        .divider { text-align: center; color: var(--text-muted); font-size: 0.8rem; margin: 16px 0; }
+        .role-tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+        .role-tab {
+            flex: 1; padding: 10px; border: 1px solid var(--border-color);
+            border-radius: 8px; background: var(--bg-secondary);
+            cursor: pointer; font-size: 0.85rem; font-weight: 600;
+            color: var(--text-secondary); text-align: center; transition: all 0.2s;
+        }
+        .role-tab.active { background: #3b82f6; color: white; border-color: #3b82f6; }
+        .error-msg { background: rgba(239,68,68,0.1); color: #ef4444; padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 16px; display: none; }
+    </style>
+</head>
+<body data-theme="light">
+    <div class="auth-box">
+        <div class="auth-logo">AI<span>Recruit</span></div>
+        <div class="auth-subtitle">Sign in to your account</div>
+
+        <div class="role-tabs">
+            <div class="role-tab active" onclick="setRole('candidate')">👤 Candidate</div>
+            <div class="role-tab" onclick="setRole('recruiter')">💼 Recruiter</div>
+            <div class="role-tab" onclick="setRole('admin')">⚙️ Admin</div>
+        </div>
+
+        <div class="error-msg" id="error-msg"></div>
+
+        <div class="form-group">
+            <label class="form-label">Email Address</label>
+            <input class="form-control" type="email" id="email" placeholder="you@example.com" />
+        </div>
+        <div class="form-group">
+            <label class="form-label">Password</label>
+            <input class="form-control" type="password" id="password" placeholder="••••••••" />
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;" onclick="handleLogin()" id="login-btn">
+            Sign In
+        </button>
+
+        <div class="divider">— or —</div>
+        <p style="text-align:center;font-size:0.875rem;color:var(--text-secondary);">
+            Don't have an account? <a href="/register" style="color:#3b82f6;font-weight:600;">Register</a>
+        </p>
+
+        <!-- Quick demo accounts hint -->
+        <div style="margin-top:20px;padding:14px;background:var(--bg-secondary);border-radius:8px;font-size:0.8rem;color:var(--text-muted);">
+            <strong style="color:var(--text-secondary);">Demo:</strong> Register a new account to get started. Choose your role above.
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        let selectedRole = "candidate";
+
+        function setRole(role) {
+            selectedRole = role;
+            document.querySelectorAll(".role-tab").forEach(t => t.classList.remove("active"));
+            event.target.classList.add("active");
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value;
+            const btn = document.getElementById("login-btn");
+            const errEl = document.getElementById("error-msg");
+
+            if (!email || !password) {
+                showError("Please fill in all fields.");
+                return;
+            }
+
+            btn.textContent = "Signing in...";
+            btn.disabled = true;
+            errEl.style.display = "none";
+
+            try {
+                // FastAPI login uses form data (OAuth2PasswordRequestForm)
+                const formData = new FormData();
+                formData.append("username", email);  // FastAPI OAuth2 uses "username" field
+                formData.append("password", password);
+
+                const data = await API.postForm("/api/auth/login", formData);
+
+                Auth.setToken(data.access_token);
+                Auth.setUser({
+                    id: data.user_id,
+                    email: data.email,
+                    full_name: data.full_name,
+                    role: data.role
+                });
+
+                Toast.show("Login successful! Redirecting...", "success");
+                setTimeout(() => window.location.href = "/dashboard", 800);
+
+            } catch (err) {
+                showError(err.message || "Login failed. Check your credentials.");
+                btn.textContent = "Sign In";
+                btn.disabled = false;
+            }
+        }
+
+        function showError(msg) {
+            const el = document.getElementById("error-msg");
+            el.textContent = msg;
+            el.style.display = "block";
+        }
+
+        // Allow Enter key to submit
+        document.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") handleLogin();
+        });
+
+        // Redirect if already logged in
+        if (Auth.isLoggedIn()) window.location.href = "/dashboard";
+    </script>
+</body>
+</html>

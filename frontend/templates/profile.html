@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile — AI Recruitment</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app-layout">
+    <aside class="sidebar">
+        <div class="sidebar-logo"><h2>AI<span>Recruit</span></h2></div>
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-item"><span class="icon">🏠</span> Dashboard</a>
+            <a href="/jobs" class="nav-item"><span class="icon">💼</span> Jobs</a>
+            <a href="/upload-resume" class="nav-item"><span class="icon">📄</span> Upload Resume</a>
+            <a href="/analytics" class="nav-item"><span class="icon">📊</span> Analytics</a>
+            <a href="/profile" class="nav-item active"><span class="icon">👤</span> Profile</a>
+            <a href="#" class="nav-item" id="logout-btn"><span class="icon">🚪</span> Logout</a>
+        </nav>
+        <div style="padding:16px;border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="font-size:0.85rem;font-weight:600;color:#e2e8f0" id="user-name"></div>
+            <div style="font-size:0.75rem;color:#475569" id="user-role"></div>
+        </div>
+    </aside>
+
+    <div class="main-content">
+        <header class="header">
+            <div class="header-title">My Profile</div>
+            <div class="header-actions">
+                <button class="theme-toggle" id="theme-toggle">🌙</button>
+            </div>
+        </header>
+
+        <div class="page-content">
+            <div style="display:grid;grid-template-columns:1fr 2fr;gap:24px;max-width:900px;">
+                <!-- Profile Card -->
+                <div>
+                    <div class="card" style="text-align:center;">
+                        <div style="width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 16px;">👤</div>
+                        <div style="font-weight:700;font-size:1.1rem;" id="profile-name">Loading...</div>
+                        <div style="color:var(--text-secondary);font-size:0.85rem;margin:4px 0;" id="profile-email"></div>
+                        <span class="badge badge-blue" id="profile-role" style="margin-top:8px;"></span>
+                        <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-color);">
+                            <div style="font-size:0.85rem;color:var(--text-secondary);" id="profile-phone"></div>
+                            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:4px;" id="profile-joined"></div>
+                        </div>
+                    </div>
+
+                    <!-- Interview Questions Card -->
+                    <div class="card" style="margin-top:16px;">
+                        <div class="card-header"><div class="card-title">❓ Interview Prep</div></div>
+                        <div class="form-group" style="margin-bottom:10px;">
+                            <input class="form-control" id="iq-skills" placeholder="python,sql,machine learning" />
+                        </div>
+                        <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="loadQuestions()">Generate Questions</button>
+                    </div>
+                </div>
+
+                <!-- Main Content -->
+                <div>
+                    <!-- Resume Summary -->
+                    <div class="card" style="margin-bottom:16px;">
+                        <div class="card-header">
+                            <div class="card-title">📄 Resume Summary</div>
+                            <a href="/upload-resume" class="btn btn-outline btn-sm">Update</a>
+                        </div>
+                        <div id="resume-summary">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+
+                    <!-- Interview Questions Output -->
+                    <div class="card" id="questions-card" style="display:none;">
+                        <div class="card-header"><div class="card-title">💬 Interview Questions</div></div>
+                        <div id="questions-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/app.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", async () => {
+        if (!Auth.requireAuth()) return;
+        await loadProfile();
+        await loadResumeSummary();
+    });
+
+    async function loadProfile() {
+        try {
+            const user = await API.get("/api/auth/me");
+            document.getElementById("profile-name").textContent = user.full_name;
+            document.getElementById("profile-email").textContent = user.email;
+            document.getElementById("profile-role").textContent = user.role.charAt(0).toUpperCase() + user.role.slice(1);
+            document.getElementById("profile-phone").textContent = user.phone ? "📞 " + user.phone : "No phone added";
+            document.getElementById("profile-joined").textContent = "Joined " + formatDate(user.created_at);
+            // Pre-fill skills for interview questions
+            if (user.role === "candidate") {
+                const resume = await API.get("/api/resume/my-resume").catch(() => null);
+                if (resume?.skills?.length) {
+                    document.getElementById("iq-skills").value = resume.skills.slice(0,4).join(",");
+                }
+            }
+        } catch (err) { console.error(err); }
+    }
+
+    async function loadResumeSummary() {
+        const el = document.getElementById("resume-summary");
+        try {
+            const r = await API.get("/api/resume/my-resume");
+            el.innerHTML = `
+                <div style="display:flex;flex-direction:column;gap:14px;">
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:0.85rem;">
+                        <div style="padding:12px;background:var(--bg-secondary);border-radius:8px;text-align:center;">
+                            <div style="font-size:1.4rem;font-weight:800;color:#3b82f6">${r.experience_years||0}</div>
+                            <div style="color:var(--text-muted);font-size:0.75rem;margin-top:2px;">Yrs Exp.</div>
+                        </div>
+                        <div style="padding:12px;background:var(--bg-secondary);border-radius:8px;text-align:center;">
+                            <div style="font-size:1.4rem;font-weight:800;color:#10b981">${(r.skills||[]).length}</div>
+                            <div style="color:var(--text-muted);font-size:0.75rem;margin-top:2px;">Skills</div>
+                        </div>
+                        <div style="padding:12px;background:var(--bg-secondary);border-radius:8px;text-align:center;">
+                            <div style="font-size:1.4rem;font-weight:800;color:#f59e0b">${r.completeness_score?.toFixed(0)||0}%</div>
+                            <div style="color:var(--text-muted);font-size:0.75rem;margin-top:2px;">Complete</div>
+                        </div>
+                    </div>
+                    <div>${renderScoreBar(r.completeness_score||0, "Resume Completeness")}</div>
+                    <div>
+                        <div style="font-size:0.8rem;color:var(--text-muted);margin-bottom:8px;font-weight:600;">ALL SKILLS</div>
+                        <div class="skill-tags">${(r.skills||[]).map(s=>`<span class="skill-tag">${s}</span>`).join("") || "<span style='color:var(--text-muted)'>No skills detected yet</span>"}</div>
+                    </div>
+                    <div style="font-size:0.85rem;display:flex;gap:12px;flex-wrap:wrap;">
+                        <span>🎓 ${r.education||"N/A"}</span>
+                        <span>📅 Updated ${formatDate(r.uploaded_at)}</span>
+                    </div>
+                </div>`;
+        } catch {
+            el.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted);">
+                <p>No resume uploaded yet.</p>
+                <a href="/upload-resume" class="btn btn-primary btn-sm" style="margin-top:12px;display:inline-flex;">Upload Resume</a>
+            </div>`;
+        }
+    }
+
+    async function loadQuestions() {
+        const skills = document.getElementById("iq-skills").value.trim();
+        if (!skills) { Toast.show("Enter at least one skill", "error"); return; }
+
+        const card = document.getElementById("questions-card");
+        const container = document.getElementById("questions-container");
+        card.style.display = "block";
+        showLoading(container);
+
+        try {
+            const data = await API.get(`/api/interview/questions?skills=${encodeURIComponent(skills)}`);
+            let html = "";
+            for (const [skill, levels] of Object.entries(data.questions)) {
+                html += `<div style="margin-bottom:20px;">
+                    <div style="font-weight:700;font-size:0.95rem;padding:8px 12px;background:var(--bg-secondary);border-radius:8px;margin-bottom:12px;">
+                        🔧 ${skill.charAt(0).toUpperCase()+skill.slice(1)}
+                    </div>`;
+                for (const [level, questions] of Object.entries(levels)) {
+                    const colors = { beginner: "#10b981", intermediate: "#f59e0b", advanced: "#ef4444" };
+                    html += `<div style="margin-bottom:10px;">
+                        <div style="font-size:0.8rem;font-weight:700;color:${colors[level]};margin-bottom:6px;text-transform:uppercase;">${level}</div>
+                        <div style="display:flex;flex-direction:column;gap:6px;">
+                            ${questions.map((q,i)=>`<div style="padding:10px 14px;background:var(--bg-secondary);border-radius:8px;border-left:3px solid ${colors[level]};font-size:0.875rem;">${i+1}. ${q}</div>`).join("")}
+                        </div>
+                    </div>`;
+                }
+                html += "</div>";
+            }
+            container.innerHTML = html;
+            Toast.show(`Generated ${data.total_questions} questions!`, "success");
+        } catch (err) {
+            container.innerHTML = `<p style="color:#ef4444">${err.message}</p>`;
+        }
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — AI Recruitment</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- SIDEBAR -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-logo">
+                <h2>AI<span>Recruit</span></h2>
+                <div style="font-size:0.7rem;color:#475569;margin-top:2px;">Recruitment Platform</div>
+            </div>
+            <nav class="sidebar-nav">
+                <div class="nav-section-title">Main</div>
+                <a href="/dashboard" class="nav-item"><span class="icon">🏠</span> Dashboard</a>
+                <a href="/jobs" class="nav-item"><span class="icon">💼</span> Jobs</a>
+
+                <!-- Candidate-only links -->
+                <div id="candidate-nav">
+                    <div class="nav-section-title">My Profile</div>
+                    <a href="/upload-resume" class="nav-item"><span class="icon">📄</span> Upload Resume</a>
+                    <a href="/profile" class="nav-item"><span class="icon">👤</span> My Profile</a>
+                </div>
+
+                <!-- Recruiter-only links -->
+                <div id="recruiter-nav" style="display:none">
+                    <div class="nav-section-title">Recruiting</div>
+                    <a href="/analytics" class="nav-item"><span class="icon">📊</span> Analytics</a>
+                    <a href="/jobs" class="nav-item"><span class="icon">➕</span> Post a Job</a>
+                </div>
+
+                <div class="nav-section-title">Tools</div>
+                <a href="/docs" class="nav-item" target="_blank"><span class="icon">📖</span> API Docs</a>
+                <a href="#" class="nav-item" id="logout-btn"><span class="icon">🚪</span> Logout</a>
+            </nav>
+
+            <!-- User info at bottom -->
+            <div style="padding:16px;border-top:1px solid rgba(255,255,255,0.06);">
+                <div style="font-size:0.85rem;font-weight:600;color:#e2e8f0" id="user-name">Loading...</div>
+                <div style="font-size:0.75rem;color:#475569;margin-top:2px;" id="user-role"></div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <div class="main-content">
+            <header class="header">
+                <div class="header-title">Dashboard</div>
+                <div class="header-actions">
+                    <button class="theme-toggle" id="theme-toggle">🌙</button>
+                </div>
+            </header>
+
+            <div class="page-content">
+                <!-- Welcome Banner -->
+                <div style="background:linear-gradient(135deg,#1e3a5f,#1e40af);border-radius:16px;padding:28px;margin-bottom:24px;color:white;">
+                    <h2 id="welcome-msg" style="font-size:1.4rem;font-weight:700;margin-bottom:6px;">Welcome back! 👋</h2>
+                    <p style="opacity:0.75;font-size:0.9rem;" id="welcome-sub">Here's what's happening in your recruitment pipeline.</p>
+                </div>
+
+                <!-- Stats Grid (Recruiter view) -->
+                <div class="stats-grid" id="recruiter-stats" style="display:none">
+                    <div class="stat-card">
+                        <div class="stat-icon blue">👥</div>
+                        <div class="stat-info"><h3 id="stat-candidates">—</h3><p>Total Candidates</p></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon green">💼</div>
+                        <div class="stat-info"><h3 id="stat-jobs">—</h3><p>Active Jobs</p></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon amber">📋</div>
+                        <div class="stat-info"><h3 id="stat-apps">—</h3><p>Applications</p></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon purple">🎯</div>
+                        <div class="stat-info"><h3 id="stat-ats">—</h3><p>Avg ATS Score</p></div>
+                    </div>
+                </div>
+
+                <!-- Charts Row (Recruiter) -->
+                <div class="charts-grid" id="recruiter-charts" style="display:none">
+                    <div class="chart-card">
+                        <div class="card-header">
+                            <div class="card-title">Applications per Job</div>
+                        </div>
+                        <canvas id="appsChart" height="220"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <div class="card-header">
+                            <div class="card-title">ATS Score Distribution</div>
+                        </div>
+                        <canvas id="scoreChart" height="220"></canvas>
+                    </div>
+                </div>
+
+                <!-- Candidate Dashboard -->
+                <div id="candidate-dashboard">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+                        <div class="card">
+                            <div class="card-header"><div class="card-title">📄 Resume Status</div></div>
+                            <div id="resume-status">
+                                <div class="spinner"></div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header"><div class="card-title">📋 Quick Actions</div></div>
+                            <div style="display:flex;flex-direction:column;gap:10px;">
+                                <a href="/upload-resume" class="btn btn-primary">📤 Upload / Update Resume</a>
+                                <a href="/jobs" class="btn btn-outline">🔍 Browse Jobs</a>
+                                <a href="/profile" class="btn btn-outline">👤 Edit Profile</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", async () => {
+            if (!Auth.requireAuth()) return;
+
+            const user = Auth.getUser();
+            document.getElementById("welcome-msg").textContent = `Welcome back, ${user.full_name}! 👋`;
+
+            if (user.role === "recruiter" || user.role === "admin") {
+                // Show recruiter UI
+                document.getElementById("candidate-nav").style.display = "none";
+                document.getElementById("recruiter-nav").style.display = "block";
+                document.getElementById("recruiter-stats").style.display = "grid";
+                document.getElementById("recruiter-charts").style.display = "grid";
+                document.getElementById("candidate-dashboard").style.display = "none";
+                document.getElementById("welcome-sub").textContent = "Your recruitment analytics overview.";
+                await loadRecruiterDashboard();
+            } else {
+                // Candidate UI
+                await loadCandidateDashboard();
+            }
+        });
+
+        async function loadRecruiterDashboard() {
+            try {
+                const data = await API.get("/api/analytics/dashboard");
+                const ov = data.overview;
+                document.getElementById("stat-candidates").textContent = ov.total_candidates;
+                document.getElementById("stat-jobs").textContent = ov.total_jobs;
+                document.getElementById("stat-apps").textContent = ov.total_applications;
+                document.getElementById("stat-ats").textContent = ov.avg_ats_score + "%";
+
+                // Chart 1 – Applications per Job
+                const appsData = data.apps_per_job || [];
+                new Chart(document.getElementById("appsChart"), {
+                    type: "bar",
+                    data: {
+                        labels: appsData.map(d => d.job.length > 20 ? d.job.slice(0,18)+"…" : d.job),
+                        datasets: [{
+                            label: "Applications",
+                            data: appsData.map(d => d.count),
+                            backgroundColor: "rgba(59,130,246,0.7)",
+                            borderRadius: 6,
+                        }]
+                    },
+                    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+                });
+
+                // Chart 2 – Score Distribution
+                const scoreData = data.score_distribution || [];
+                new Chart(document.getElementById("scoreChart"), {
+                    type: "doughnut",
+                    data: {
+                        labels: scoreData.map(d => d.range),
+                        datasets: [{
+                            data: scoreData.map(d => d.count),
+                            backgroundColor: ["#ef4444","#f59e0b","#3b82f6","#10b981","#8b5cf6"],
+                            borderWidth: 0,
+                        }]
+                    },
+                    options: { plugins: { legend: { position: "bottom" } } }
+                });
+            } catch (err) {
+                console.error("Dashboard error:", err);
+            }
+        }
+
+        async function loadCandidateDashboard() {
+            const el = document.getElementById("resume-status");
+            try {
+                const resume = await API.get("/api/resume/my-resume");
+                el.innerHTML = `
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <span style="color:var(--accent-green)">✅</span>
+                            <strong>Resume uploaded</strong>
+                        </div>
+                        <div style="font-size:0.85rem;color:var(--text-secondary);">
+                            <div>📧 ${resume.email || "N/A"}</div>
+                            <div>🎓 ${resume.education || "N/A"}</div>
+                            <div>⏱️ ${resume.experience_years} years exp.</div>
+                        </div>
+                        <div>${renderScoreBar(resume.completeness_score, "Completeness")}</div>
+                        <div class="skill-tags">
+                            ${(resume.skills || []).slice(0,6).map(s => `<span class="skill-tag">${s}</span>`).join("")}
+                        </div>
+                    </div>`;
+            } catch {
+                el.innerHTML = `
+                    <div style="text-align:center;padding:20px;">
+                        <div style="font-size:2rem;margin-bottom:8px;">📄</div>
+                        <p style="color:var(--text-secondary);font-size:0.9rem;">No resume uploaded yet.</p>
+                        <a href="/upload-resume" class="btn btn-primary btn-sm" style="margin-top:12px;">Upload Now</a>
+                    </div>`;
+            }
+        }
+    </script>
+</body>
+</html>

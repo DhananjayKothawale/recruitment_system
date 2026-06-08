@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register — AI Recruitment</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body { background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .auth-box { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 40px; width: 100%; max-width: 440px; box-shadow: var(--shadow-lg); }
+        .role-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 24px; }
+        .role-option { border: 2px solid var(--border-color); border-radius: 10px; padding: 16px 8px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .role-option:hover { border-color: #3b82f6; }
+        .role-option.selected { border-color: #3b82f6; background: rgba(59,130,246,0.08); }
+        .role-option .role-icon { font-size: 1.6rem; margin-bottom: 4px; }
+        .role-option .role-name { font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); }
+        .role-option.selected .role-name { color: #3b82f6; }
+        .error-msg { background: rgba(239,68,68,0.1); color: #ef4444; padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 16px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="auth-box">
+        <div style="font-size:1.4rem;font-weight:800;margin-bottom:4px;">Create Account</div>
+        <div style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:24px;">Join AI Recruitment System</div>
+
+        <!-- Role Selection -->
+        <div style="font-size:0.875rem;font-weight:500;color:var(--text-secondary);margin-bottom:10px;">I am a...</div>
+        <div class="role-grid">
+            <div class="role-option selected" id="role-candidate" onclick="selectRole('candidate')">
+                <div class="role-icon">👤</div>
+                <div class="role-name">Candidate</div>
+            </div>
+            <div class="role-option" id="role-recruiter" onclick="selectRole('recruiter')">
+                <div class="role-icon">💼</div>
+                <div class="role-name">Recruiter</div>
+            </div>
+            <div class="role-option" id="role-admin" onclick="selectRole('admin')">
+                <div class="role-icon">⚙️</div>
+                <div class="role-name">Admin</div>
+            </div>
+        </div>
+
+        <div class="error-msg" id="error-msg"></div>
+
+        <div class="form-group">
+            <label class="form-label">Full Name</label>
+            <input class="form-control" type="text" id="full_name" placeholder="John Doe" />
+        </div>
+        <div class="form-group">
+            <label class="form-label">Email Address</label>
+            <input class="form-control" type="email" id="email" placeholder="you@example.com" />
+        </div>
+        <div class="form-group">
+            <label class="form-label">Phone (optional)</label>
+            <input class="form-control" type="text" id="phone" placeholder="+91 98765 43210" />
+        </div>
+        <div class="form-group">
+            <label class="form-label">Password</label>
+            <input class="form-control" type="password" id="password" placeholder="Minimum 6 characters" />
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;" onclick="handleRegister()" id="reg-btn">
+            Create Account
+        </button>
+
+        <p style="text-align:center;font-size:0.875rem;color:var(--text-secondary);margin-top:16px;">
+            Already have an account? <a href="/login" style="color:#3b82f6;font-weight:600;">Sign In</a>
+        </p>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script>
+        let selectedRole = "candidate";
+
+        function selectRole(role) {
+            selectedRole = role;
+            document.querySelectorAll(".role-option").forEach(el => el.classList.remove("selected"));
+            document.getElementById(`role-${role}`).classList.add("selected");
+        }
+
+        async function handleRegister() {
+            const full_name = document.getElementById("full_name").value.trim();
+            const email = document.getElementById("email").value.trim();
+            const phone = document.getElementById("phone").value.trim();
+            const password = document.getElementById("password").value;
+            const btn = document.getElementById("reg-btn");
+
+            if (!full_name || !email || !password) {
+                showError("Name, email, and password are required.");
+                return;
+            }
+            if (password.length < 6) {
+                showError("Password must be at least 6 characters.");
+                return;
+            }
+
+            btn.textContent = "Creating account...";
+            btn.disabled = true;
+
+            try {
+                await API.post("/api/auth/register", {
+                    full_name, email, password,
+                    role: selectedRole,
+                    phone: phone || null
+                });
+
+                Toast.show("Account created! Please login.", "success");
+                setTimeout(() => window.location.href = "/login", 1200);
+
+            } catch (err) {
+                showError(err.message || "Registration failed.");
+                btn.textContent = "Create Account";
+                btn.disabled = false;
+            }
+        }
+
+        function showError(msg) {
+            const el = document.getElementById("error-msg");
+            el.textContent = msg;
+            el.style.display = "block";
+        }
+
+        document.addEventListener("keydown", e => { if (e.key === "Enter") handleRegister(); });
+        if (Auth.isLoggedIn()) window.location.href = "/dashboard";
+    </script>
+</body>
+</html>
